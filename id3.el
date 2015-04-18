@@ -25,19 +25,44 @@
 ;;; Code:
 
 (defun id3-get-data (file)
-  "Return the id3 data as reported by the id3tool program.
-Elements will typically include \"song title\", \"artist\",
-\"album\" and \"track\"."
+  "Return the id3 data.
+Elements will typically include :track, :artist, :album, :year, :comment,
+:track-number and :genre."
   (with-temp-buffer
-    (call-process "id3tool" nil (current-buffer) nil file)
-    (let ((data nil))
-      (goto-char (point-min))
-      (while (looking-at "\\([^:]+\\):[ \t]+\\(.*\\)")
-	(push (cons (downcase (match-string 1))
-		    (string-trim (match-string 2)))
-	      data)
-	(forward-line 1))
-      (nreverse data))))
+    (let ((coding-system-for-read 'binary))
+      (set-buffer-multibyte nil)
+      (insert-file-contents file)
+      (goto-char (- (buffer-size) 127))
+      (when (looking-at "TAG")
+	;; This is an id3v1 file.
+	(id3-parse-id3v1 (buffer-substring (point) (point-max)))))))
+
+(defun id3-parse-id3v1 (id3)
+  (setq b id3)
+  (let ((types '((:track 30)
+		 (:artist 30)
+		 (:album 30)
+		 (:year 4)
+		 (:comment 29)
+		 (:track-number 1 :binary)
+		 (:genre 1 :binary)))
+	(start 3)
+	(data nil))
+    (dolist (type types)
+      (let ((length (cadr type))
+	    (format (caddr type)))
+      (setq data (nconc data
+			(list (car type)
+			      (id3-chunk id3 start length format))))
+      (cl-incf start length)))
+    data))
+
+(defun id3-chunk (id3 start length format)
+  (let ((chunk (substring id3 start (+ start length))))
+    (if (eq format :binary)
+	;; Return the numeric value.
+	(aref chunk 0)
+      (replace-regexp-in-string "\0+\\'" "" chunk))))
 
 (defun id3-set-sata (file data)
   )
