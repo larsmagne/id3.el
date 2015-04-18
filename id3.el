@@ -24,6 +24,24 @@
 
 ;;; Code:
 
+(defun id3-get-data (file)
+  "Return the id3 data as reported by the id3tool program.
+Elements will typically include \"song title\", \"artist\",
+\"album\" and \"track\"."
+  (with-temp-buffer
+    (call-process "id3tool" nil (current-buffer) nil file)
+    (let ((data nil))
+      (goto-char (point-min))
+      (while (looking-at "\\([^:]+\\):[ \t]+\\(.*\\)")
+	(push (cons (downcase (match-string 1))
+		    (string-trim (match-string 2)))
+	      data)
+	(forward-line 1))
+      (nreverse data))))
+
+(defun id3-set-sata (file data)
+  )
+	    
 (provide 'id3)
 
 ;;; id3.el ends here
