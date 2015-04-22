@@ -22,6 +22,10 @@
 
 ;;; Commentary:
 
+;; This package supports both id3v1 and id3v2 versions up to id3v2.4.
+
+;; (setq auto-mode-alist (cons '("\\.mp3" . id3-mode) auto-mode-alist))
+
 ;;; Code:
 
 (defun id3-get-data (file)
@@ -191,7 +195,52 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 
 (defun id3-set-data (file data)
   )
-	    
+
+(defvar id3-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map text-mode-map)
+    (define-key map "\C-c\C-c" 'id3-save)
+    (easy-menu-define nil map ""
+      '("id3"
+	["Save" id3-save t]))))
+
+(defcustom id3-charset 'utf-8
+  "Charset to use on non-ASCII text parts."
+  :type '(choice (const :tag 'utf-8)
+		 (const :tag 'utf-16)))
+
+(define-derived-mode id3-mode text-mode "id3"
+  "Mode for editing id3 tags in mp3 files."
+  (setq-local id3-charset id3-charset)
+  (setq-local write-file-functions 'id3-save)
+  (id3-display-data)
+  (set-buffer-modified-p nil))
+
+(defun id3-display-data ()
+  (let ((data (id3-get-data buffer-file-name)))
+    (erase-buffer)
+    (dolist (frame (plist-get data :frames))
+      (insert (format "%s %s\n"
+		      (propertize
+		       (format "%s:" (plist-get frame :frame-id))
+		       'face '(:foreground "red"))
+		      (plist-get frame :data))))
+    (goto-char (point-min))))
+
+(defun id3-save ()
+  "Update the id3 data of the mp3 file."
+  (interactive)
+  (let ((data (id3-parse-mode-data)))
+    ))
+
+(defun id3-parse-mode-data ()
+  (let ((data nil))
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward "^\\([A-Z]+\\): *\\(.*\\)" nil t)
+	(push (cons (match-string 1) (match-string 2)) data)))
+    (nreverse data)))
+
 (provide 'id3)
 
 ;;; id3.el ends here
