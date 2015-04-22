@@ -1,3 +1,6 @@
+;; NOTE!  This has been barely tested and is liable to destroy your
+;; precious mp3 files if you actually use it.
+
 ;;; id3.el --- functions for querying and setting id3 data in mp3 files
 
 ;; Copyright (C) 2015 Lars Magne Ingebrigtsen
@@ -23,6 +26,9 @@
 ;;; Commentary:
 
 ;; This package supports both id3v1 and id3v2 versions up to id3v2.4.
+
+;; NOTE!  This has been barely tested and is liable to destroy your
+;; precious mp3 files if you actually use it.
 
 ;; (setq auto-mode-alist (cons '("\\.mp3" . id3-mode) auto-mode-alist))
 
