@@ -116,9 +116,11 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 	  (plist-put data :data
 		     (decode-coding-string
 		      (plist-get data :data)
-		      (if (zerop (plist-get data :text-encoding))
-			  'iso-8859-1
-			'utf-16)))
+		      (case (plist-get data :text-encoding)
+			(0 'iso-8859-1)
+			(1 'utf-16)
+			(2 'utf-16)
+			(3 'utf-8))))
 	  (nconc header data))
       (nconc header
 	     (id3-parse-chunk
@@ -187,7 +189,7 @@ Elements will typically include :track, :artist, :album, :year, :comment,
       (incf i))
     number))
 
-(defun id3-set-sata (file data)
+(defun id3-set-data (file data)
   )
 	    
 (provide 'id3)
