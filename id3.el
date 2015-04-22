@@ -203,7 +203,7 @@ Elements will typically include :track, :artist, :album, :year, :comment,
       (insert-file-contents file)
       (id3-delete-tags)
       (id3-insert-v1-tags data)
-      (id3-insert-v2-tags data))))
+      (id3-insert-v2-tags data id3-charset))))
 
 (defun id3-insert-v1-tags (data)
   (save-excursion
@@ -224,17 +224,62 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 			 (or (cdr (assoc (cadr (assq name map)) data))
 			     "")))))))
 
-(defun id3-insert-data (length format data)
+(defun id3-insert-v2-tags (data charset)
+  (save-excursion
+    (goto-char (point-min))
+    (let (tags)
+      (with-temp-buffer
+	(set-buffer-multibyte nil)
+	(dolist (elem data)
+	  (id3-insert-data 4 :text (car elem))
+	  (id3-insert-data 4 :binary (length (cdr elem)))
+	  (id3-insert-data 2 :binary 0)
+	  (id3-insert-data nil :text (cdr elem) charset))
+	(setq tags (buffer-string)))
+      (insert "ID3")
+      (id3-insert-data 1 :binary 4)
+      (id3-insert-data 1 :binary 0)
+      (id3-insert-data 1 :binary 0)
+      (id3-insert-data 4 :binary (length tags) 7)
+      (insert tags))))
+
+(defun id3-insert-data (length format data &optional extra)
   (cond
    ((eq format :text)
-    (if (> (length data) length)
-	(insert (substring data 0 length))
+    (cond
+     ((null length)
+      ;; This is a v2 string, so we need to encode the charset.
+      (let ((coding-system
+	     (cond
+	      ((string-match "\\`[[:ascii:]]*\\'" data)
+	       (id3-insert-data 1 :binary 0)
+	       nil)
+	      ((eq extra 'utf-16)
+	       (id3-insert-data 1 :binary 1)
+	       'utf-16)
+	      (t
+	       ;; utf-8
+	       (id3-insert-data 1 :binary 3)
+	       'utf-8))))
+	(insert (encode-coding-string data coding-system))))
+     ((> (length data) length)
+      (insert (substring data 0 length)))
+     (t
       (insert data)
-      (insert (make-string (- length (length data)) ?\0))))
+      (insert (make-string (- length (length data)) ?\0)))))
    ((eq format :binary)
-    (insert (string-to-number data)))
+    (let ((number (if (stringp data)
+		      (string-to-number data)
+		    data)))
+      (id3-insert-binary number length (or extra 8))))
    (t
     (error "No such format: %s" format))))
+
+(defun id3-insert-binary (number length bits)
+  (dotimes (i length)
+    (insert
+     (logand (lsh number (- (* bits (- length i 1))))
+	     (1- (expt 2 bits))))))
 
 (defun id3-delete-tags ()
   ;; First remove id3v2 tags from the beginning of the buffer.
