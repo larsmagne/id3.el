@@ -89,7 +89,8 @@ Elements will typically include :track, :artist, :album, :year, :comment,
     (when (plist-get (plist-get header :flags) :extended-header)
       (setq header (nconc header :extended-header (id3-parse-extended-header))))
     (let ((size (plist-get header :size)))
-      (while (> size 0)
+      (while (and (> size 0)
+		  (not (= (id3-v2-chunk 4 :binary 8) 0)))
 	(let ((frame (id3-parse-frame)))
 	  (setq size (- size 10 (plist-get frame :size)))
 	  (push frame frames))))
@@ -137,7 +138,7 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 	  (nconc header data))
       (nconc header
 	     (id3-parse-chunk
-	      `((:data ,(1- (plist-get header :size)))))))))
+	      `((:data ,(plist-get header :size))))))))
 
 (defun id3-flag (header name)
   (plist-get (plist-get header :flags) name))
