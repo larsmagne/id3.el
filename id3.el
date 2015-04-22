@@ -196,15 +196,6 @@ Elements will typically include :track, :artist, :album, :year, :comment,
       (incf i))
     number))
 
-(defun id3-set-data (file data)
-  (with-temp-buffer
-    (let ((coding-system-for-read 'binary))
-      (set-buffer-multibyte nil)
-      (insert-file-contents file)
-      (id3-delete-tags)
-      (id3-insert-v1-tags data)
-      (id3-insert-v2-tags data id3-charset))))
-
 (defun id3-insert-v1-tags (data)
   (save-excursion
     (goto-char (point-max))
@@ -217,12 +208,13 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 		 (:track-number "TRCK")
 		 (:genre "TCON"))))
     (dolist (type id3-v1-format)
-      (let ((name (pop type))
-	    (length (pop type))
-	    (format (or (pop type) :text)))
-	(id3-insert-data length format
-			 (or (cdr (assoc (cadr (assq name map)) data))
-			     "")))))))
+      (let* ((name (pop type))
+	     (length (pop type))
+	     (format (or (pop type) :text))
+	     (value (encode-coding-string
+		     (or (cdr (assoc (cadr (assq name map)) data)) "")
+		     'iso-8859-1)))
+	(id3-insert-data length format value))))))
 
 (defun id3-insert-v2-tags (data charset)
   (save-excursion
@@ -231,13 +223,18 @@ Elements will typically include :track, :artist, :album, :year, :comment,
       (with-temp-buffer
 	(set-buffer-multibyte nil)
 	(dolist (elem data)
-	  (id3-insert-data 4 :text (car elem))
-	  (id3-insert-data 4 :binary (length (cdr elem)))
-	  (id3-insert-data 2 :binary 0)
-	  (id3-insert-data nil :text (cdr elem) charset))
+	  (let ((text
+		 (with-temp-buffer
+		   (set-buffer-multibyte nil)
+		   (id3-insert-data nil :text (cdr elem) charset)
+		   (buffer-string))))
+	    (id3-insert-data 4 :text (car elem))
+	    (id3-insert-data 4 :binary (length text))
+	    (id3-insert-data 2 :binary 0)
+	    (insert text)))
 	(setq tags (buffer-string)))
       (insert "ID3")
-      (id3-insert-data 1 :binary 4)
+      (id3-insert-data 1 :binary 3)
       (id3-insert-data 1 :binary 0)
       (id3-insert-data 1 :binary 0)
       (id3-insert-data 4 :binary (length tags) 7)
@@ -254,6 +251,9 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 	      ((string-match "\\`[[:ascii:]]*\\'" data)
 	       (id3-insert-data 1 :binary 0)
 	       nil)
+	      ((eq extra 'iso-8859-1)
+	       (id3-insert-data 1 :binary 0)
+	       'iso-8859-1)
 	      ((eq extra 'utf-16)
 	       (id3-insert-data 1 :binary 1)
 	       'utf-16)
@@ -307,6 +307,7 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 (defcustom id3-charset 'utf-8
   "Charset to use on non-ASCII text parts."
   :type '(choice (const :tag 'utf-8)
+		 (const :tag 'iso-8859-1)
 		 (const :tag 'utf-16)))
 
 (define-derived-mode id3-mode text-mode "id3"
@@ -314,10 +315,12 @@ Elements will typically include :track, :artist, :album, :year, :comment,
   (setq-local id3-charset id3-charset)
   (setq-local write-file-functions 'id3-save)
   (id3-display-data)
-  (set-buffer-modified-p nil))
+  (set-buffer-modified-p nil)
+  (setq-local backup-inhibited nil))
 
 (defun id3-display-data ()
   (let ((data (id3-get-data buffer-file-name)))
+    (buffer-disable-undo)
     (erase-buffer)
     (dolist (frame (plist-get data :frames))
       (insert (format "%s %s\n"
@@ -325,13 +328,25 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 		       (format "%s:" (plist-get frame :frame-id))
 		       'face '(:foreground "red"))
 		      (plist-get frame :data))))
+    (buffer-enable-undo)
     (goto-char (point-min))))
 
 (defun id3-save ()
   "Update the id3 data of the mp3 file."
   (interactive)
-  (let ((data (id3-parse-mode-data)))
-    ))
+  (let ((file buffer-file-name)
+	(data (id3-parse-mode-data)))
+    (backup-buffer)
+    (with-temp-buffer
+      (let ((coding-system-for-read 'binary))
+	(set-buffer-multibyte nil)
+	(insert-file-contents file)
+	(id3-delete-tags)
+	(id3-insert-v1-tags data)
+	(id3-insert-v2-tags data id3-charset)
+	(write-region (point-min) (point-max) file nil)))
+    (set-buffer-modified-p nil))
+  t)
 
 (defun id3-parse-mode-data ()
   (let ((data nil))
