@@ -122,23 +122,50 @@ Elements will typically include :track, :artist, :album, :year, :comment,
     (when (id3-flag header :grouping-identity)
       (setq header (nconc header
 			  (id3-parse-chunk '(:group-identity 1 binary)))))
-    (if (string-match "\\`T" (plist-get header :frame-id))
-	(let ((data
-	       (id3-parse-chunk
-		`((:text-encoding 1 :binary)
-		  (:data ,(1- (plist-get header :size)))))))
-	  (plist-put data :data
-		     (decode-coding-string
-		      (plist-get data :data)
-		      (case (plist-get data :text-encoding)
-			(0 'iso-8859-1)
-			(1 'utf-16)
-			(2 'utf-16)
-			(3 'utf-8))))
-	  (nconc header data))
+    (cond
+     ((string-match "\\`T" (plist-get header :frame-id))
+      (let ((data
+	     (id3-parse-chunk
+	      `((:text-encoding 1 :binary)
+		(:data ,(1- (plist-get header :size)))))))
+	(plist-put data :data
+		   (decode-coding-string
+		    (plist-get data :data)
+		    (case (plist-get data :text-encoding)
+		      (0 'iso-8859-1)
+		      (1 'utf-16)
+		      (2 'utf-16)
+		      (3 'utf-8))))
+	(nconc header data)))
+     ((equal (plist-get header :frame-id) "APIC")
+      (let ((data (plist-get
+		   (id3-parse-chunk
+		    `((:data ,(plist-get header :size))))
+		   :data)))
+	(with-temp-buffer
+	  (set-buffer-multibyte nil)
+	  (insert data)
+	  (goto-char (point-min))
+	  (let ((encoding (following-char)))
+	    (forward-char 1)
+	    (let ((mime-type (buffer-substring (point)
+					       (re-search-forward "\0")))
+		  (picture-type (prog1
+				    (following-char)
+				  (forward-char 1)))
+		  (description (buffer-substring (point)
+						 (re-search-forward "\0")))
+		  (image (buffer-substring (point) (point-max))))
+	      (nconc header
+		     `(:image ,image
+		       :description ,description
+		       :picture-type ,picture-type
+		       :mime-type ,mime-type
+		       :encoding ,encoding)))))))
+     (t
       (nconc header
 	     (id3-parse-chunk
-	      `((:data ,(plist-get header :size))))))))
+	      `((:data ,(plist-get header :size)))))))))
 
 (defun id3-flag (header name)
   (plist-get (plist-get header :flags) name))
@@ -330,11 +357,18 @@ Elements will typically include :track, :artist, :album, :year, :comment,
     (buffer-disable-undo)
     (erase-buffer)
     (dolist (frame (plist-get data :frames))
-      (insert (format "%s %s\n"
-		      (propertize
-		       (format "%s:" (plist-get frame :frame-id))
-		       'face '(:foreground "red"))
-		      (plist-get frame :data))))
+      (insert
+       (format
+	"%s %s\n"
+	(propertize
+	 (format "%s:" (plist-get frame :frame-id))
+	 'face '(:foreground "red"))
+	(if (equal (plist-get frame :frame-id) "APIC")
+	    (propertize " "
+			'display
+			(create-image (plist-get frame :image)
+				      'imagemagick t))
+	  (plist-get frame :data)))))
     (buffer-enable-undo)
     (goto-char (point-min))))
 
