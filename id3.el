@@ -28,6 +28,15 @@
 
 ;;; Code:
 
+(defvar id3-v1-format
+  '((:track 30)
+    (:artist 30)
+    (:album 30)
+    (:year 4)
+    (:comment 29)
+    (:track-number 1 :binary)
+    (:genre 1 :binary)))
+
 (defun id3-get-data (file)
   "Return the id3 data.
 Elements will typically include :track, :artist, :album, :year, :comment,
@@ -49,13 +58,7 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 
 (defun id3-parse-id3v1 (id3)
   (setq b id3)
-  (let ((types '((:track 30)
-		 (:artist 30)
-		 (:album 30)
-		 (:year 4)
-		 (:comment 29)
-		 (:track-number 1 :binary)
-		 (:genre 1 :binary)))
+  (let ((types id3-v1-format)
 	(start 3)
 	(data nil))
     (dolist (type types)
@@ -194,7 +197,59 @@ Elements will typically include :track, :artist, :album, :year, :comment,
     number))
 
 (defun id3-set-data (file data)
-  )
+  (with-temp-buffer
+    (let ((coding-system-for-read 'binary))
+      (set-buffer-multibyte nil)
+      (insert-file-contents file)
+      (id3-delete-tags)
+      (id3-insert-v1-tags data)
+      (id3-insert-v2-tags data))))
+
+(defun id3-insert-v1-tags (data)
+  (save-excursion
+    (goto-char (point-max))
+    (insert "TAG")
+    (let ((map '((:track "TIT2")
+		 (:artist "TPE1")
+		 (:album "TALB")
+		 (:year "TYER")
+		 (:comment "COMM")
+		 (:track-number "TRCK")
+		 (:genre "TCON"))))
+    (dolist (type id3-v1-format)
+      (let ((name (pop type))
+	    (length (pop type))
+	    (format (or (pop type) :text)))
+	(id3-insert-data length format
+			 (or (cdr (assoc (cadr (assq name map)) data))
+			     "")))))))
+
+(defun id3-insert-data (length format data)
+  (cond
+   ((eq format :text)
+    (if (> (length data) length)
+	(insert (substring data 0 length))
+      (insert data)
+      (insert (make-string (- length (length data)) ?\0))))
+   ((eq format :binary)
+    (insert (string-to-number data)))
+   (t
+    (error "No such format: %s" format))))
+
+(defun id3-delete-tags ()
+  ;; First remove id3v2 tags from the beginning of the buffer.
+  (when (and (> (buffer-size) 10)
+	     (goto-char (point-min))
+	     (looking-at "ID3"))
+    (let ((data (id3-parse-id3v2)))
+      (goto-char (point-min))
+      (delete-region (point) (+ (point) 10 (plist-get (plist-get data :header)
+						      :size)))))
+  ;; Then id3v1 tags from the end.
+  (when (and (> (buffer-size) 128)
+	     (goto-char (- (buffer-size) 127))
+	     (looking-at "TAG"))
+    (delete-region (point) (point-max))))
 
 (defvar id3-mode-map
   (let ((map (make-sparse-keymap)))
@@ -237,7 +292,7 @@ Elements will typically include :track, :artist, :album, :year, :comment,
   (let ((data nil))
     (save-excursion
       (goto-char (point-min))
-      (while (re-search-forward "^\\([A-Z]+\\): *\\(.*\\)" nil t)
+      (while (re-search-forward "^\\([A-Z0-9]+\\): *\\(.*\\)" nil t)
 	(push (cons (match-string 1) (match-string 2)) data)))
     (nreverse data)))
 
