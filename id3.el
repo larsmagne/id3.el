@@ -99,11 +99,33 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 			    :compression
 			    :encryption
 			    :grouping-identity))))))
-    (prog1
-	(nconc header
-	       (list :data (buffer-substring
-			    (point) (+ (point) (plist-get header :size)))))
-      (forward-char (plist-get header :size)))))
+    (when (id3-flag header :compression)
+      (setq header (nconc header
+			  (id3-parse-chunk '(:compression-length 4 binary)))))
+    (when (id3-flag header :encryption)
+      (setq header (nconc header
+			  (id3-parse-chunk '(:encryption-method 1 binary)))))
+    (when (id3-flag header :grouping-identity)
+      (setq header (nconc header
+			  (id3-parse-chunk '(:group-identity 1 binary)))))
+    (if (string-match "\\`T" (plist-get header :frame-id))
+	(let ((data
+	       (id3-parse-chunk
+		`((:text-encoding 1 :binary)
+		  (:data ,(1- (plist-get header :size)))))))
+	  (plist-put data :data
+		     (decode-coding-string
+		      (plist-get data :data)
+		      (if (zerop (plist-get data :text-encoding))
+			  'iso-8859-1
+			'utf-16)))
+	  (nconc header data))
+      (nconc header
+	     (id3-parse-chunk
+	      `((:data ,(1- (plist-get header :size)))))))))
+
+(defun id3-flag (header name)
+  (plist-get (plist-get header :flags) name))
 
 (defun id3-parse-extended-header ()
   (let ((data (id3-parse-chunk
