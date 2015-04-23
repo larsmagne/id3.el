@@ -102,18 +102,17 @@ Elements will typically include :track, :artist, :album, :year, :comment,
   (let ((header (id3-parse-chunk
 		 '((:frame-id 4)
 		   (:size 4 :binary)
-		   (:flags 2 :bit-field
-			   (:tag-alter-preservation
-			    :file-alter-preservation
-			    :read-only
-			    :reserved
-			    :reserved
-			    :reserved
-			    :reserved
-			    :reserved
-			    :compression
-			    :encryption
-			    :grouping-identity))))))
+		   (:flags 2 :bit-field (:tag-alter-preservation
+					 :file-alter-preservation
+					 :read-only
+					 :reserved
+					 :reserved
+					 :reserved
+					 :reserved
+					 :reserved
+					 :compression
+					 :encryption
+					 :grouping-identity))))))
     (when (id3-flag header :compression)
       (setq header (nconc header
 			  (id3-parse-chunk '(:compression-length 4 binary)))))
@@ -159,10 +158,10 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 		  (image (buffer-substring (point) (point-max))))
 	      (nconc header
 		     `(:image ,image
-		       :description ,description
-		       :picture-type ,picture-type
-		       :mime-type ,mime-type
-		       :encoding ,encoding)))))))
+			      :description ,description
+			      :picture-type ,picture-type
+			      :mime-type ,mime-type
+			      :encoding ,encoding)))))))
      (t
       (nconc header
 	     (id3-parse-chunk
