@@ -81,7 +81,8 @@ Elements will typically include :track, :artist, :album, :year, :comment,
     (if (eq format :binary)
 	;; Return the numeric value.
 	(aref chunk 0)
-      (replace-regexp-in-string "\0+\\'" "" chunk))))
+      (let ((string (replace-regexp-in-string "\0+\\'" "" chunk)))
+	(decode-coding-string string (car (detect-coding-string string)))))))
 
 (defun id3-parse-id3v2 ()
   (let ((header (id3-parse-header))
