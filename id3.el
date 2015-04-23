@@ -35,13 +35,13 @@
 ;;; Code:
 
 (defvar id3-v1-format
-  '((:track 30)
-    (:artist 30)
-    (:album 30)
-    (:year 4)
-    (:comment 29)
-    (:track-number 1 :binary)
-    (:genre 1 :binary)))
+  '(("TIT2" 30)
+    ("TPE1" 30)
+    ("TALB" 30)
+    ("TYER" 4)
+    ("COMM" 29)
+    ("TRCK" 1 :binary)
+    ("TCON" 1 :binary)))
 
 (defun id3-get-data (file)
   "Return the id3 data.
@@ -63,18 +63,18 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 	(id3-parse-id3v1 (buffer-substring (point) (point-max))))))))
 
 (defun id3-parse-id3v1 (id3)
-  (setq b id3)
   (let ((types id3-v1-format)
 	(start 3)
 	(data nil))
     (dolist (type types)
-      (let ((length (cadr type))
-	    (format (caddr type)))
-      (setq data (nconc data
-			(list (car type)
-			      (id3-v1-chunk id3 start length format))))
-      (cl-incf start length)))
-    data))
+      (let ((name (pop type))
+	    (length (pop type))
+	    (format (pop type)))
+	(push (list :frame-id name
+		    :data (id3-v1-chunk id3 start length format))
+	      data)
+	(cl-incf start length)))
+    (list :frames (nreverse data))))
 
 (defun id3-v1-chunk (id3 start length format)
   (let ((chunk (substring id3 start (+ start length))))
@@ -234,21 +234,14 @@ Elements will typically include :track, :artist, :album, :year, :comment,
   (save-excursion
     (goto-char (point-max))
     (insert "TAG")
-    (let ((map '((:track "TIT2")
-		 (:artist "TPE1")
-		 (:album "TALB")
-		 (:year "TYER")
-		 (:comment "COMM")
-		 (:track-number "TRCK")
-		 (:genre "TCON"))))
     (dolist (type id3-v1-format)
       (let* ((name (pop type))
 	     (length (pop type))
 	     (format (or (pop type) :text))
 	     (value (encode-coding-string
-		     (or (cdr (assoc (cadr (assq name map)) data)) "")
+		     (or (cdr (assoc name data)) "")
 		     'iso-8859-1)))
-	(id3-insert-data length format value))))))
+	(id3-insert-data length format value)))))
 
 (defun id3-insert-v2-tags (data charset)
   (save-excursion
