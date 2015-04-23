@@ -115,13 +115,13 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 					 :grouping-identity))))))
     (when (id3-flag header :compression)
       (setq header (nconc header
-			  (id3-parse-chunk '(:compression-length 4 binary)))))
+			  (id3-parse-chunk '(:compression-length 4 :binary)))))
     (when (id3-flag header :encryption)
       (setq header (nconc header
-			  (id3-parse-chunk '(:encryption-method 1 binary)))))
+			  (id3-parse-chunk '(:encryption-method 1 :binary)))))
     (when (id3-flag header :grouping-identity)
       (setq header (nconc header
-			  (id3-parse-chunk '(:group-identity 1 binary)))))
+			  (id3-parse-chunk '(:group-identity 1 :binary)))))
     (cond
      ((string-match "\\`T" (plist-get header :frame-id))
       (let ((data
