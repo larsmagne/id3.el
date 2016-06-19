@@ -329,7 +329,8 @@ Elements will typically include :track, :artist, :album, :year, :comment,
     (define-key map "\C-c\C-c" 'id3-save)
     (easy-menu-define nil map ""
       '("id3"
-	["Save" id3-save t]))))
+	["Save" id3-save t]))
+    map))
 
 (defcustom id3-charset 'utf-8
   "Charset to use on non-ASCII text parts."
@@ -365,6 +366,11 @@ Elements will typically include :track, :artist, :album, :year, :comment,
     (buffer-enable-undo)
     (goto-char (point-min))))
 
+(defun id3-get-frame (data frame-id)
+  (loop for frame in (plist-get data :frames)
+	when (equal (plist-get frame :frame-id) frame-id)
+	return (plist-get frame :data)))
+
 (defun id3-save ()
   "Update the id3 data of the mp3 file."
   (interactive)
@@ -381,6 +387,17 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 	(write-region (point-min) (point-max) file nil)))
     (set-buffer-modified-p nil))
   t)
+
+(defun id3-set-tags (file tags)
+  "Set id3 TAGS on FILE."
+  (with-temp-buffer
+    (let ((coding-system-for-read 'binary))
+      (set-buffer-multibyte nil)
+	(insert-file-contents file)
+	(id3-delete-tags)
+	(id3-insert-v1-tags tags)
+	(id3-insert-v2-tags tags 'utf-8)
+	(write-region (point-min) (point-max) file nil))))
 
 (defun id3-parse-mode-data ()
   (let ((data nil))
