@@ -85,20 +85,69 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 	(decode-coding-string string (car (detect-coding-string string)))))))
 
 (defun id3-parse-id3v2 ()
-  (let ((header (id3-parse-header))
-	frames)
+  (let ((header (id3-parse-header)))
+    (if (> (plist-get header :version-major) 2)
+	(id3-parse-id3v2-3 header)
+      (id3-parse-id3v2-0 header))))
+
+(defun id3-parse-id3v2-3 (header)
+  (let (frames)
     (when (plist-get (plist-get header :flags) :extended-header)
       (setq header (nconc header :extended-header (id3-parse-extended-header))))
     (let ((size (plist-get header :size)))
       (while (and (> size 0)
 		  (not (= (id3-v2-chunk 4 :binary 8) 0)))
-	(let ((frame (id3-parse-frame)))
+	(let ((frame (id3-parse-frame-3)))
 	  (setq size (- size 10 (plist-get frame :size)))
 	  (push frame frames))))
     (list :header header
 	  :frames (nreverse frames))))
 
-(defun id3-parse-frame ()
+(defun id3-parse-id3v2-0 (header)
+  (let ((size (plist-get header :size))
+	frames)
+    (while (and (> size 0)
+		(not (= (id3-v2-chunk 3 :binary 8) 0)))
+      (let ((frame (id3-parse-frame-0)))
+	(setq size (- size 6 (plist-get frame :size)))
+	(push frame frames)))
+    (list :header header
+	  :frames (nreverse frames))))
+
+(defun id3-parse-frame-0 ()
+  (let ((header (id3-parse-chunk
+		 '((:frame-id 3)
+		   (:size 3 :binary)))))
+    (cond
+     ((string-match "\\`T" (plist-get header :frame-id))
+      (let ((data
+	     (id3-parse-chunk
+	      `((:text-encoding 1 :binary)
+		(:data ,(1- (plist-get header :size)))))))
+	(plist-put data :data
+		   (replace-regexp-in-string
+		    (case (plist-get data :text-encoding)
+		      (0 "\000\\'")
+		      (1 "\000\000\\'")
+		      (2 "\000\000\\'")
+		      (3 "\000\\'"))
+		    ""
+		    (plist-get data :data)))
+	(plist-put data :data
+		   (decode-coding-string
+		    (plist-get data :data)
+		    (case (plist-get data :text-encoding)
+		      (0 'iso-8859-1)
+		      (1 'utf-16)
+		      (2 'utf-16)
+		      (3 'utf-8))))
+	(nconc header data)))
+     (t
+      (nconc header
+	     (id3-parse-chunk
+	      `((:data ,(plist-get header :size)))))))))
+
+(defun id3-parse-frame-3 ()
   (let ((header (id3-parse-chunk
 		 '((:frame-id 4)
 		   (:size 4 :binary)
@@ -115,13 +164,16 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 					 :grouping-identity))))))
     (when (id3-flag header :compression)
       (setq header (nconc header
-			  (id3-parse-chunk '(:compression-length 4 :binary)))))
+			  (id3-parse-chunk
+			   '((:compression-length 4 :binary))))))
     (when (id3-flag header :encryption)
       (setq header (nconc header
-			  (id3-parse-chunk '(:encryption-method 1 :binary)))))
+			  (id3-parse-chunk
+			   '((:encryption-method 1 :binary))))))
     (when (id3-flag header :grouping-identity)
       (setq header (nconc header
-			  (id3-parse-chunk '(:group-identity 1 :binary)))))
+			  (id3-parse-chunk
+			   '((:group-identity 1 :binary))))))
     (cond
      ((string-match "\\`T" (plist-get header :frame-id))
       (let ((data
