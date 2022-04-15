@@ -126,7 +126,7 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 		(:data ,(1- (plist-get header :size)))))))
 	(plist-put data :data
 		   (replace-regexp-in-string
-		    (case (plist-get data :text-encoding)
+		    (cl-case (plist-get data :text-encoding)
 		      (0 "\000\\'")
 		      (1 "\000\000\\'")
 		      (2 "\000\000\\'")
@@ -136,7 +136,7 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 	(plist-put data :data
 		   (decode-coding-string
 		    (plist-get data :data)
-		    (case (plist-get data :text-encoding)
+		    (cl-case (plist-get data :text-encoding)
 		      (0 'iso-8859-1)
 		      (1 'utf-16)
 		      (2 'utf-16)
@@ -183,7 +183,7 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 	(plist-put data :data
 		   (decode-coding-string
 		    (plist-get data :data)
-		    (case (plist-get data :text-encoding)
+		    (cl-case (plist-get data :text-encoding)
 		      (0 'iso-8859-1)
 		      (1 'utf-16)
 		      (2 'utf-16)
@@ -268,7 +268,7 @@ Elements will typically include :track, :artist, :album, :year, :comment,
 	(setq fields (nconc fields
 			    (list field (not (zerop
 					      (logand number (expt 2 i)))))))
-	(decf i))
+	(cl-decf i))
       fields))
    (t
     (error "Unknown format %s" format))))    
@@ -279,7 +279,7 @@ Elements will typically include :track, :artist, :album, :year, :comment,
     (while (< i length)
       (setq number (+ (* number (expt 2 (or bits 8)))
 		      (char-after (+ (point) i))))
-      (incf i))
+      (cl-incf i))
     number))
 
 (defun id3-insert-v1-tags (data)
@@ -419,9 +419,9 @@ Elements will typically include :track, :artist, :album, :year, :comment,
     (goto-char (point-min))))
 
 (defun id3-get-frame (data frame-id)
-  (loop for frame in (plist-get data :frames)
-	when (equal (plist-get frame :frame-id) frame-id)
-	return (plist-get frame :data)))
+  (cl-loop for frame in (plist-get data :frames)
+	   when (equal (plist-get frame :frame-id) frame-id)
+	   return (plist-get frame :data)))
 
 (defun id3-save ()
   "Update the id3 data of the mp3 file."
